@@ -9,8 +9,8 @@
 
 #include "./headers/errors.hpp"
 #include "./headers/ioFileHandler.hpp"
-#include "./headers/parser.hpp"
-#include "./headers/code.hpp"
+#include "./headers/tokenizer.hpp"
+#include "./headers/compilationEngine.hpp"
 
 
 int main(int argc, char *argv[]){
@@ -18,47 +18,70 @@ int main(int argc, char *argv[]){
     try{
         
         // Check if two arguments are provided in command prompt.
-        // second argument should be a file name so that it can be validated.
 
         if(argc != 2){
-            throw errors::IllegalCallException("File name is not provided.");
+            throw errors::IllegalCallException("Folder name is not provided.");
         }
-        
-        // Create XML file for tokenizer
-        ioFileHandler::IOFileHandler *ioFile = new ioFileHandler::IOFileHandler();
 
-        ioFile->createOutputStream(argv[1], ".jack", ".xml");
-        std::string fileNameNoExt = ioFile->fileNameNoExt(), inputFolderName = ioFile->inputFolderName();
-        codeAPI::Code codeOutput(ioFile->getOutputStream(), fileNameNoExt);
-        std::string cmdType, sym, arg1, inputFileExt, inputFileName;
-        int arg2 = 0;
+        std::string inputFileExt = ".jack", outputFileExt = ".xml"; 
+        int inputFileExtLen = inputFileExt.length(), outputFileExtLen = outputFileExt.length();
 
+        /*
+            For each input ".jack" file, there needs to be one ".xml" tokenizer file and one ".vm" file.
+        */  
         
+        ioFileHandler::InputFileHandler *inputFile = new ioFileHandler::InputFileHandler();
+        std::string inputFolderName = argv[1];
+        std::string currFileName = "", currFileExt = "", currOutputFileName = "";
+
         for (const auto & entry : std::filesystem::directory_iterator(inputFolderName)){
             
-            // Check if input file extension is ".jack"
-            inputFileExt = entry.path();
-            inputFileExt = inputFileExt.substr(inputFileExt.length()-5, 5);
-            
-            if(inputFileExt != ".jack") continue;
-            
-            inputFileName = entry.path();
-            parserAPI::Parser parser(ioFile->setInputStream(inputFileName, ".jack"));
-    
-            codeOutput.setFileNameNoExt(inputFileName);
-            codeOutput.writeToFile("// FILE: "+inputFileName+"\n\n");
-            
-            // while (parser.hasMoreCommands()){
-            //     parser.advance();
+            inputFileExt = ".jack";
+            inputFileExtLen = inputFileExt.length();
 
-                
-            // }
+            // Get the extenstion of file and check if equal to the wanted file extension.
+            currFileName = entry.path();
+            currFileExt = currFileName.substr(currFileName.length()-inputFileExtLen, inputFileExtLen);
+            
+            // if file ext is not equal to input file, move to next file.
+            if(currFileExt != inputFileExt) continue;
 
-            ioFile->closeInputFileStream();
+            // Create input and output stream for each file
+            inputFile->setInputStream(currFileName, inputFileExt);
+
+            ioFileHandler::OutputFileHandler *tokenizerFile = new ioFileHandler::OutputFileHandler();
+            ioFileHandler::OutputFileHandler *compiledFile = new ioFileHandler::OutputFileHandler();
+        
+            tokenizerFile->createOutputStream(currFileName, inputFileExt, ".txml");
+            std::string tokenizerFileName = tokenizerFile->getOutputFileName();
+            // tokenizer
+            tokenizerAPI::Tokenizer tokenizer(inputFile->getInputStream(), tokenizerFile->getOutputStream());
+            
+            tokenizer.writeInit();
+
+            while(tokenizer.hasMoreTokens()){
+                tokenizer.advance();              
+            }
+
+            tokenizer.writeEnd();
+            
+            inputFile->closeInputFileStream();
+            tokenizerFile->closeOutputFileStream();
+
+            std::cout<<tokenizerFileName<<std::endl;
+            
+            // compiler
+            inputFile->setInputStream(tokenizerFileName, ".txml");
+            compiledFile->createOutputStream(currFileName, inputFileExt, ".xml");
+            
+            compileAPI::Compile compiler(inputFile->getInputStream(), compiledFile->getOutputStream());
+            
+            compiler.compileTokens();
+
+            compiledFile->closeOutputFileStream();
         }
         
         
-        ioFile->closeOutputFileStream();
         return 0;
 
     }catch(errors::FileHandlingException &e){
