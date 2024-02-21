@@ -1,87 +1,114 @@
 #include"./compilationEngine.hpp"
 
-void compileAPI::Compile::getNextLine(std::string err){
-    if(!_in.eof()){
-        getline(_in, _inputLine);
-    }else{
-        throw errors::IllegalCallException(err);
-    }
-}
-
-void compileAPI::Compile::getTokenType(){
-    _pos = 1;
-    _tokenType = "";
-    while(_inputLine[_pos] != '>') _tokenType += _inputLine[_pos++];
-}
-
-void compileAPI::Compile::getToken(){
-    _pos = 0;
-    _token = "";
-    while(_inputLine[_pos] != '>') _pos++;
-    _pos += 2;
-    while(!(_inputLine[_pos] == ' ' && _inputLine[_pos+1] == '<')) _token += _inputLine[_pos++];
-}
-
-bool compileAPI::Compile::checkVariableType(){
-    for(std::string s:types){
+/*
+    Checks if string is a part of keyboardConstant[] = {"true", "false", "null", "this"};
+*/
+bool compileAPI::Compile::checkKeyboardConst(){
+    for(std::string &s:keywordConstant){
         if(s == _token) return true;
     }
-    if(_st.find(_token) != _st.end()) return true;
     return false;
 }
 
-void compileAPI::Compile::compileTokens(){
+/*
+    Checks if string is a part of unaryTerm[] = {"~", "-"}
+*/
+bool compileAPI::Compile::checkUnaryTerm(){
+    for(std::string &s:unaryTerm){
+        if(s == _token) return true;
+    }
+    return false;
+}
+
+/*
+    Checks if string is a part of term[] = {"+", "-", "*", "/", "&amp;", "|", "&lt;", "&gt;", "="}
+*/
+bool compileAPI::Compile::checkTerm(){
+    for(std::string &s:term){
+        if(s == _token) return true;
+    }
+    return false;
+}
+
+/*
+    Gets the input line from tokenizer.
+    Takes 3 arguments:
+    1. Error message to be shown if no line is received.
+    2. tokenType matches the input line.
+    3. token matches the input token
+*/
+void compileAPI::Compile::getNextLine(const std::string &errMsg, const std::string &tokenType, const std::string &token){
     if(!_in.eof()){
         getline(_in, _inputLine);
-    }
-    getline(_in, _inputLine);
-    compileClass();
+        _pos = 1;
+        _tokenType = "";
+        _token = "";
+        while(_inputLine[_pos] != '>') _tokenType += _inputLine[_pos++];
+        _pos += 2;
+        while(!(_inputLine[_pos] == ' ' && _inputLine[_pos+1] == '<')) _token += _inputLine[_pos++];
 
-    throw errors::IllegalCallException("Illegal call at: "+ _inputLine);
+        if(tokenType.length() > 0 && tokenType != _tokenType){
+            throw errors::IllegalCallException("Invalid token type: " + tokenType + ". Line: " + _inputLine);
+        }
+
+        if(token.length() > 0 && token != _token){
+            throw errors::IllegalCallException("Invalid token : " + token + ". Line: " + _inputLine);
+        }
+    
+    }else{
+        throw errors::IllegalCallException(errMsg);
+    }
+}
+
+/*
+    Writes a line to output file
+*/
+void compileAPI::Compile::writeLine(){
+    _out<<_inputLine<<"\n";
+}
+
+/*
+    Start of compilation. <tokens>  and </tokens> are skipped.
+*/
+void compileAPI::Compile::compileTokens(){
+    getline(_in, _inputLine); // <tokens>
+    getNextLine("", "", ""); // <class>
+    compileClass();
+    getline(_in, _inputLine); // </tokens>
 } 
 
+/*
+    Compiles a class. Grammar is of the type:
+    'class' className '{' classVarDec* subroutineDec* '}'
+*/
 void compileAPI::Compile::compileClass(){
     _out<<"<class>\n";
-    
-    _out<<_inputLine<<"\n";
+    writeLine(); // class
 
-    // identifier
-    getNextLine("Identifier should be present after class.");
-    getTokenType();
-    getToken();
-    if(_tokenType != "identifier"){
-        throw errors::IllegalCallException("Identifier should be present after class: "+ _inputLine);
-    }
-    _st.insert(_token);
-    _out<<_inputLine<<"\n";
+    getNextLine("Identifier should be present after class.", "identifier", ""); //className
+    writeLine();
     
-    // symbol
-    getNextLine("Missing '{'" + _inputLine);
-    getToken();
-    
-    if(_token != "{"){
-        throw errors::IllegalCallException("Missing '{: "+ _inputLine);
-    }
-    _out<<_inputLine<<"\n";
+    getNextLine("Missing '{'" + _inputLine, "", "{"); // '{'    
+    writeLine();
 
     
-    // declaration, routine or completed
+    // run till all declarations and routines are completed. Class is terminated by '}'
     while(1){
-        getNextLine("Class is not completed: "+_inputLine);
-        getTokenType();
-        getToken();
+        getNextLine("Class is not completed: "+_inputLine, "", "");
+                
         if(_tokenType == "keyword"){
             if(_token == "static" || _token == "field"){
                 compileClassVarDec();
             }else if(_token == "constructor" || _token == "function" || _token == "method"){
                 compileSubroutine();
-            }else if(_token == "}"){
-                _out<<_inputLine<<"\n";
-                break;
             }else{
                 throw errors::IllegalCallException("Class should have functions or fields:" + _inputLine);
             }
+        }else if(_token == "}"){
+            writeLine();
+            break;
         }else{
+            std::cout<<_token<<std::endl;
             throw errors::IllegalCallException("Class definition must begin with a keyword:" + _inputLine);
         }
     }
@@ -97,157 +124,456 @@ void compileAPI::Compile::compileClass(){
 void compileAPI::Compile::compileClassVarDec(){
     
     _out<<"<classVarDec>\n";
-    _out<<_inputLine<<"\n";
+    writeLine(); // static | field
     
-    getNextLine("Variable type is undefined:" + _inputLine);
-    getToken();
-    
-    if(checkVariableType()){
-        _out<<_inputLine<<"\n";
-    }else{
-        throw errors::IllegalCallException("Variable type is invalid:" + _inputLine);
-    }
+    getNextLine("Variable type is undefined:" + _inputLine, "", ""); // type
+    writeLine();
 
     while(_token != ";"){
-        getNextLine("Variable is not present");
-        getTokenType();
-        getToken();
-        if(_tokenType != "identifier"){
-            throw errors::IllegalCallException("Variable name is invalid:" + _inputLine);
-        }
-        _out<<_inputLine<<"\n";
-        getNextLine("Illegal termination of declaration: "+_inputLine);
-        getToken();
-        if(_token == ","){
-            _out<<_inputLine<<"\n";
-        }
+        getNextLine("Variable is not present", "identifier", ""); // varName
+        writeLine();
+
+        getNextLine("Illegal termination of declaration: "+_inputLine, "", ""); // next varName | ','  | ';'
+        
+        if(_token == ",") writeLine();
     }
 
-    _out<<_inputLine<<"\n";
+    writeLine();
     _out<<"</classVarDec>\n";
 }
 
+/*
+    subroutine is of the type:
+    ('constructor' | 'function' | 'method') ('void' | type) subroutineName '(' parameterList ')' subroutineBody
+*/
 void compileAPI::Compile::compileSubroutine(){
     _out<<"<subroutineDec>\n";
-    _out<<_inputLine<<"\n";
+    writeLine(); //'constructor' | 'function' | 'method'
     
-    getNextLine("Function type is undefined:" + _inputLine);
-    getToken();
+    getNextLine("Function type is undefined:" + _inputLine, "", ""); // 'void' | type
+    writeLine();
+
+    getNextLine("Function name is not present", "identifier", ""); // subroutineName 
+    writeLine();
+
+    getNextLine("Bracket '(' is missing.", "", "(");
+    writeLine();
+
+    getNextLine("Bracket ')' is missing.", "", ""); // parameterList | ')'
     
-    if(checkVariableType() || _token == "void"){
-        _out<<_inputLine<<"\n";
-    }else{
-        throw errors::IllegalCallException("Function type is invalid:" + _inputLine);
-    }
-
-    getNextLine("Function name is not present");
-    getTokenType();
-    
-    if(_tokenType != "identifier"){
-        throw errors::IllegalCallException("Function name is invalid:" + _inputLine);
-    }
-    _out<<_inputLine<<"\n";
-
-    getNextLine("Bracket '(' is missing.");
-    getToken();
-    if(_token != "("){
-        throw errors::IllegalCallException("Bracket '(' is missing.");
-    }
-    _out<<_inputLine<<"\n";
-
-    getNextLine("Bracket ')' is missing.");
-    getToken();
     compileParameterList();
 
     if(_token != ")"){
         throw errors::IllegalCallException("Bracket ')' is missing.");
     }
-    _out<<_inputLine<<"\n";
+    writeLine();
 
-    getNextLine("Bracket '{' is missing.");
-    getToken();
-    if(_token != "{"){
-        throw errors::IllegalCallException("Bracket '{' is missing.");
+    // subroutine body handling
+    getNextLine("Sub routine body must start with '{': "+_inputLine, "", "{");
+    
+    _out<<"<subroutineBody>\n";
+    writeLine();
+
+    while(_token != "}"){
+        getNextLine("Sub routine body must start with '{': "+_inputLine, "", "");
+        
+        if(_token == "var"){
+            compileVarDec();
+        }else if(_token == "let" || _token == "if" || _token == "while" || _token == "do" || _token == "return"){
+            compileStatements();
+        }else break;
     }
 
-    _out<<_inputLine<<"\n";
-
+    if(_token != "}"){
+        throw errors::IllegalCallException("Sub routine body must end with '}': "+_inputLine);
+    }
+   
+    writeLine();
+    _out<<"</subroutineBody>\n";
     _out<<"</subroutineDec>\n";
 }
 
+/*
+    Parameter list is of the type:
+    ((type varName) (',' type varName)?) | null
+
+    A loop is run till ')' is found.
+*/
 void compileAPI::Compile::compileParameterList(){
     _out<<"<parameterList>\n";
-    
+
     while(_token != ")"){
-        getNextLine("Variable Type is not present");
-        getTokenType();
-        getToken();
+        writeLine();
 
-        if(!checkVariableType()){
-            throw errors::IllegalCallException("Variable Type is invalid:" + _inputLine);
-        }
+        getNextLine("Variable Type is not present", "identifier", "");
+        writeLine();
 
-        _out<<_inputLine<<"\n";
-
-        getNextLine("Variable Type is not present");
-        getTokenType();
-        if(_tokenType != "identifier"){
-            throw errors::IllegalCallException("Variable Name is invalid:" + _inputLine);
-        }
-        _out<<_inputLine<<"\n";
-
-        getNextLine("Illegal termination of declaration: "+_inputLine);
-        getToken();
+        getNextLine("Illegal termination of declaration: "+_inputLine, "", "");
+        
         if(_token == ","){
-            _out<<_inputLine<<"\n";
+            writeLine();
+            getNextLine("Variable Type is not present", "", "");
         }
     }
-
-    _out<<_inputLine<<"\n";
-
-    getNextLine("Sub routine body must start with '(: "+_inputLine);
-    getToken();
 
     _out<<"</parameterList>\n";
 }
 
+/*
+    Variable declaration is of the type:
+    'var' type varName (',' varName)? ';'
+
+    A loop is run till ';' is found.
+    If ',' is found, more variables are present.
+*/
 void compileAPI::Compile::compileVarDec(){
-    
+    _out<<"<varDec>\n";
+    writeLine(); // var
+
+    getNextLine("Variable type is not present", "", ""); // type
+    writeLine();
+        
+    while(_token != ";"){
+        getNextLine("Variable name is not present", "identifier", "");
+        writeLine();
+
+        getNextLine("Illegal termination of declaration: "+_inputLine, "", "");
+        
+        if(_token == ","){
+            writeLine();
+        }
+    }
+    writeLine();
+    _out<<"</varDec>\n";
 }
 
+/*
+    Statements can be:
+    1. *blank*
+    2. Let
+    3. If
+    4. Do
+    5. While
+    6. Return
+
+    Rest are errors.
+*/
 void compileAPI::Compile::compileStatements(){
-    
+    _out<<"<statements>\n";
+    while(1){
+        if(_token == "let") compileLet();
+        else if(_token == "if") compileIf();
+        else if(_token == "do") compileDo();
+        else if(_token == "while") compileWhile();
+        else if(_token == "return") compileReturn();
+        else break;
+    }
+    _out<<"</statements>\n";
 }
 
+/*
+    Do statement is of the type:
+    'do' subRoutineCall ';'
+*/
 void compileAPI::Compile::compileDo(){
+    _out<<"<doStatement>\n";
+    writeLine(); // do
+
+    // start of subroutine call. We fetch the name of subroutine call here and 
+    // then pass the rest to compileSubroutineCall().
+    getNextLine("Do statement must have an identifier: "+_inputLine, "identifier", "");
+    writeLine();
+
+    getNextLine("Subroutine call is incomplete: " + _inputLine, "", "");
+
+    compileSubroutineCall();
     
+    getNextLine("Subroutine call must end with ';': " + _inputLine, "", ";");
+    writeLine();
+    
+    getNextLine(""+_inputLine, "", "");
+    _out<<"</doStatement>\n";
 }
 
+/*
+    This is used to complete a sub routine call. These can be:
+    
+    1. subroutineName '(' expressionList ')'
+    2. (className | varName ).subroutineName'('expressionList')'
+
+    Imp: the first identifier should be taken care of before hand. The processing begins from '.' or '('
+    
+*/
+void compileAPI::Compile::compileSubroutineCall(){
+    if(_token == "("){ // case 1 
+        writeLine();
+        getNextLine("", "", "");
+        
+        compileExpressionList();
+        writeLine();
+    }else if (_token == "."){ // case 2
+        writeLine();
+        getNextLine("Subcall must have an identifier: " + _inputLine, "identifier", "");
+        writeLine();
+        getNextLine("Expressions must start with '(': " + _inputLine, "", "(");
+        compileSubroutineCall();
+    }
+}
+
+/*
+    let statement is of the type:
+    'let' varName ('[' expression ']')? '=' expression ';'
+
+    Definition of the variable is mandatory.
+    Run until ';' is reached
+*/
 void compileAPI::Compile::compileLet(){
-    
+    _out<<"<letStatement>\n";
+    writeLine();
+
+    while(_token != ";"){
+        getNextLine("Let should have a variable name: "+_inputLine, "identifier", "");
+        writeLine();
+        
+        getNextLine("Let function is incomplete: "+_inputLine, "", "");
+        if(_token == "["){
+            writeLine();
+            getNextLine("Bracket not closed ']': "+_inputLine, "", "");
+                
+            if(_token != "]"){
+                compileExpression();
+            }
+
+            writeLine();
+            getNextLine("Bracket not closed ']': "+_inputLine, "", "");
+        }
+
+        if(_token != "="){
+            throw errors::IllegalCallException("Let should have an initial value: " + _inputLine);
+        }
+        writeLine();
+        
+        getNextLine("Let should have an initial value: "+_inputLine, "", "");
+        
+        compileExpression();
+
+        // example: let a[i] = Keyboard.readInt("ENTER THE NEXT NUMBER: ");
+        if(_token == ")"){
+            getNextLine("Let should have an initial value: ", "", "");
+        }
+        
+        if(_token == ","){
+            writeLine();
+        }
+    }
+
+    writeLine();
+    getNextLine("", "", "");    
+    _out<<"</letStatement>\n";
 }
 
+/*
+    while statement is of the type:
+    'while' '(' expression ')' '{' statements '}'
+
+    Run until '}' is reached
+*/
 void compileAPI::Compile::compileWhile(){
+    _out<<"<whileStatement>\n";
+    writeLine(); // while
+
+    getNextLine("While should begin with '(': "+_inputLine, "", "(");
+    writeLine();
     
+    getNextLine("Missing expression for while statement: "+_inputLine, "", "");
+    compileExpression();
+    
+    if(_token != ")"){
+        throw errors::IllegalCallException("While initialization should end with ')': " + _inputLine);
+    }
+    writeLine();
+
+    getNextLine("While body should begin with '{': "+_inputLine, "", "{");
+    writeLine();
+    
+    getNextLine("While body should begin with '{': "+_inputLine, "", "");
+    compileStatements();
+
+    if(_token != "}"){
+        throw errors::IllegalCallException("While should end with '}': " + _inputLine);
+    }
+    writeLine();
+
+    getNextLine(""+_inputLine, "", "");
+    _out<<"</whileStatement>\n";
 }
 
+/*
+    return statement is of the type:
+    'return'  expression? ';'
+    only none or one variable can be returned. 
+*/
 void compileAPI::Compile::compileReturn(){
+    _out<<"<returnStatement>\n";
+    writeLine(); // return
+
+    getNextLine("Return missing ';': "+_inputLine, "", "");
+
+    if(_token != ";"){
+        compileExpression();
+    }
+
+    if(_token != ";"){
+        throw errors::IllegalCallException("Return missing ';': " + _inputLine);
+    }
+    writeLine();
     
+    getNextLine(""+_inputLine, "", "");
+    _out<<"</returnStatement>\n";
 }
 
+/*
+    if statement is of the type:
+    'if'  '(' expression ')' '{' statements '}'
+    ('else' '{' statements '}')? 
+*/
 void compileAPI::Compile::compileIf(){
+    _out<<"<ifStatement>\n";
+    writeLine(); // if
     
+    getNextLine("If statement should begin with '(': "+_inputLine, "", "(");
+    writeLine();
+    
+    getNextLine("If statement should have an expression: "+_inputLine, "", "");
+    compileExpression();
+    
+    if(_token != ")"){
+        throw errors::IllegalCallException("If declaration should end with ')': " + _inputLine);
+    }
+    writeLine();
+
+    getNextLine("If statement body should begin with '{': "+_inputLine, "", "{");
+    writeLine();
+    
+    getNextLine("If statement should have a body: "+_inputLine, "", "");
+    compileStatements();
+
+    if(_token != "}"){
+        throw errors::IllegalCallException("If expression body should end with '}': " + _inputLine);
+    }
+    writeLine();
+
+    getNextLine(""+_inputLine, "", "");
+    
+    // Else check.
+    if(_token == "else"){
+        writeLine();
+
+        getNextLine("Else statement body should begin with '{': "+_inputLine, "", "{");
+        writeLine();
+        
+        getNextLine("Else statement should have a body: "+_inputLine, "", "");
+        compileStatements();
+
+        if(_token != "}"){
+            throw errors::IllegalCallException("Else expression body should end with '}': " + _inputLine);
+        }
+        writeLine();
+
+        getNextLine(""+_inputLine, "", "");
+    }
+
+    _out<<"</ifStatement>\n";
 }
 
+/*
+    expressions are of the type:
+    term (op term)
+    at least one term is mandatory. other terms should be preceded by op. 
+*/
 void compileAPI::Compile::compileExpression(){
-    
+    _out<<"<expression>\n";
+    compileTerm();
+    while(checkTerm()){
+        writeLine();
+        getNextLine("Term is incomplete: " + _inputLine, "", "");
+        
+        compileTerm();
+    }
+    _out<<"</expression>\n";
 }
 
+/*
+    Term is of the type:
+    1. Integer Constant/ String Constant/ Keyboard Constant
+    2. unaryOperator term
+    3. '(' expression ')'
+    4. varName ('[' expression ']')
+    5. subroutineCall
+*/
 void compileAPI::Compile::compileTerm(){
-    _out<<_inputLine;
+    _out<<"<term>\n";
+    writeLine();
+    
+    if(_tokenType == "stringConstant" || _tokenType == "integerConstant" || checkKeyboardConst()){ // case 1
+        // already output so do nothing.
+        getNextLine("Term is incomplete: " + _inputLine, "", "");
+    
+    }else if(checkUnaryTerm()){ // case 2
+        getNextLine("Term is incomplete: " + _inputLine, "", "");
+        compileTerm();
+    }else if(_token == "("){ // case 3
+        getNextLine("Term Expression must end with ')': " + _inputLine, "", "");
+        
+        compileExpression();
+        if(_token != ")"){
+            throw errors::IllegalCallException("Expression should end with ')': " + _inputLine);
+        }
+
+        writeLine();
+        getNextLine("Term is incomplete: " + _inputLine, "", "");
+    
+    }else{
+        // we reach here if an identifier is present. Could be case 4 or 5
+        // could be varName or subroutine call. 
+        getNextLine("Term is incomplete: " + _inputLine, "", "");
+        
+        // subroutineCall
+        if(_token == "(" || _token == "."){
+            compileSubroutineCall();  
+        }else if(_token == "["){ // varName
+            writeLine();
+            getNextLine("Term is incomplete: " + _inputLine, "", "");
+            
+            compileExpression();
+            if(_token != "]"){
+                throw errors::IllegalCallException("Expression should end with ']': " + _inputLine);
+            }
+            
+            writeLine();
+            getNextLine("Term is incomplete: " + _inputLine, "", "");
+        }
+    }
+    
+    _out<<"</term>\n";
 }
 
+/*
+    ExpressionList is of the type:
+    expression (',' expression)?
+
+    looped till ')' is reached.
+*/
 void compileAPI::Compile::compileExpressionList(){
-    
+    _out<<"<expressionList>\n";
+    while(_token != ")"){
+        compileExpression();
+        
+        if(_token == ","){
+            writeLine();
+            getNextLine("Expressions must end with ')': ", "", "");
+        }
+    }
+    _out<<"</expressionList>\n";
 }   
 

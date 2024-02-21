@@ -9,6 +9,9 @@
 
 namespace compileAPI {
     static std::string types[] = {"int", "char", "boolean"};
+    static std::string term[] = {"+", "-", "*", "/", "&amp;", "|", "&lt;", "&gt;", "="};
+    static std::string unaryTerm[] = {"~", "-"};
+    static std::string keywordConstant[] = {"true", "false", "null", "this"};
 
     class Compile{
 
@@ -33,11 +36,12 @@ namespace compileAPI {
             void compileExpressionList();       
             
             // Modifying functions
-            void getTokenType();
-            void getToken();
-            void getNextLine(std::string err);
-            bool checkVariableType();
-            
+            void getNextLine(const std::string &errMsg, const std::string &tokenType, const std::string &token);
+            void writeLine();
+            void compileSubroutineCall();
+            bool checkKeyboardConst();
+            bool checkUnaryTerm();
+            bool checkTerm();            
             
         private:
             std::ifstream& _in;
@@ -45,8 +49,7 @@ namespace compileAPI {
             std::string _tokenType;
             std::string _token;
             std::string _inputLine;
-            int _lineNumber;
+            int _lineNumber = 0;
             int _pos = 0;
-            std::unordered_set<std::string> _st;
     };
 }
