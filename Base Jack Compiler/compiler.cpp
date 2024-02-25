@@ -11,8 +11,6 @@
 #include "./headers/ioFileHandler.hpp"
 #include "./headers/tokenizer.hpp"
 #include "./headers/compilationEngine.hpp"
-#include "./headers/symbolTable.hpp"
-#include "./headers/vmWriter.hpp"
 
 
 int main(int argc, char *argv[]){
@@ -41,7 +39,7 @@ int main(int argc, char *argv[]){
             inputFileExt = ".jack";
             inputFileExtLen = inputFileExt.length();
 
-            // Get the extension of file and check if equal to the wanted file extension.
+            // Get the extenstion of file and check if equal to the wanted file extension.
             currFileName = entry.path();
             currFileExt = currFileName.substr(currFileName.length()-inputFileExtLen, inputFileExtLen);
             
@@ -51,20 +49,35 @@ int main(int argc, char *argv[]){
             // Create input and output stream for each file
             inputFile->setInputStream(currFileName, inputFileExt);
 
+            ioFileHandler::OutputFileHandler *tokenizerFile = new ioFileHandler::OutputFileHandler();
             ioFileHandler::OutputFileHandler *compiledFile = new ioFileHandler::OutputFileHandler();
         
-            compiledFile->createOutputStream(currFileName, inputFileExt, "_1.vm");
-            std::string compiledFileName = compiledFile->getOutputFileName();
-            
+            tokenizerFile->createOutputStream(currFileName, inputFileExt, ".txml");
+            std::string tokenizerFileName = tokenizerFile->getOutputFileName();
             // tokenizer
-            tokenizerAPI::Tokenizer tokenizer(inputFile->getInputStream());
-            symbolTable::SymbolTable symbolTable;
-            vmWriter::VMWriter vmWriter(compiledFile->getOutputStream());
-            compileAPI::Compile compiler(tokenizer, symbolTable, vmWriter);
+            tokenizerAPI::Tokenizer tokenizer(inputFile->getInputStream(), tokenizerFile->getOutputStream());
+            
+            tokenizer.writeInit();
+
+            while(tokenizer.hasMoreTokens()){
+                tokenizer.advance();              
+            }
+
+            tokenizer.writeEnd();
+            
+            inputFile->closeInputFileStream();
+            tokenizerFile->closeOutputFileStream();
+
+            std::cout<<tokenizerFileName<<std::endl;
+            
+            // compiler
+            inputFile->setInputStream(tokenizerFileName, ".txml");
+            compiledFile->createOutputStream(currFileName, inputFileExt, ".xml");
+            
+            compileAPI::Compile compiler(inputFile->getInputStream(), compiledFile->getOutputStream());
             
             compiler.compileTokens();
 
-            inputFile->closeInputFileStream();
             compiledFile->closeOutputFileStream();
         }
         

@@ -107,48 +107,54 @@ void tokenizerAPI::Tokenizer::getKeyWordOrIdentifer(){
     while(_pos < _currentLine.length() && checkValidSymbolChar()){
         curr += _currentLine[_pos++];
     }
+
     for(int i = 0; i < _keyWordTableSize; i++){
         if(_keyWordTable[i] == curr){
-            _token = _keyWordTable[i];
-            _tokenType = "keyword";
+            _keyWord = _keyWordTable[i];
+            _tokenType = "KEYWORD";
+            _out<<"<keyword> "<<_keyWord<<" </keyword>\n";
             return;
         }
     }
 
-    _token = curr;
-    _tokenType = "identifier";
+    _identifier = curr;
+    _tokenType = "IDENTIFIER";
+    _out<<"<identifier> "<<_identifier<<" </identifier>\n";
 }
 
 void tokenizerAPI::Tokenizer::getIntVal(){
-
     while(_currentLine[_pos] >= '0' && _currentLine[_pos] <= '9'){
-        _token += _currentLine[_pos];
+        _intVal = _intVal*10 + _currentLine[_pos]-'0';
         _pos++;
     }
-    _tokenType = "integerConstant";
+    _tokenType = "INT_CONST";
+    _out<<"<integerConstant> "<<_intVal<<" </integerConstant>\n";
 }
 
 void tokenizerAPI::Tokenizer::getStringVal(){
     _pos++;
     while(_pos < _currentLine.length() && _currentLine[_pos] != '"'){
-        _token += _currentLine[_pos++];
+        _stringVal += _currentLine[_pos++];
     }
-    _tokenType = "stringConstant";
+    _tokenType = "STRING_CONST";
     _pos++;
+    _out<<"<stringConstant> "<<_stringVal<<" </stringConstant>\n";
 }
 
 void tokenizerAPI::Tokenizer::getSymbol(){
     for(char c:_symbolTable){
         if(_currentLine[_pos] == c){
-            _tokenType = "symbol";
-            _token = _currentLine[_pos];
+            _symbol = c;
+            _tokenType = "SYMBOL";
             _pos++;
-            if(_token == "<"){
-                _token = "&lt;";
-            }else if(_token == "&"){
-                _token = "&amp;";
-            }else if(_token == ">"){
-                _token = "&gt;";
+            if(_symbol == '<'){
+                _out<<"<symbol> &lt; </symbol>\n";
+            }else if(_symbol == '&'){
+                _out<<"<symbol> &amp; </symbol>\n";
+            }else if(_symbol == '>'){
+                _out<<"<symbol> &gt; </symbol>\n";
+            }else{
+                _out<<"<symbol> "<<_symbol<<" </symbol>\n";
             }
             return;
         }
@@ -168,17 +174,26 @@ void tokenizerAPI::Tokenizer::advance(){
     if((_currentLine[_pos] >= 'a' && _currentLine[_pos] <= 'z') ||
         (_currentLine[_pos] >= 'A' && _currentLine[_pos] <= 'Z') ||
         (_currentLine[_pos] == '_')){
-            _token = "";
-            _tokenType = "";
+            _keyWord = "";
+            _identifier = "";
             getKeyWordOrIdentifer();
     }else if(_currentLine[_pos] >= '0' && _currentLine[_pos] <= '9'){
-        _token = "";
+        _intVal = 0;
         getIntVal();
     }else if(_currentLine[_pos] == '"'){
-        _token = "";
+        _stringVal = "";
         getStringVal();
     }else{
         getSymbol();
     }
     
+}
+
+
+void tokenizerAPI::Tokenizer::writeInit(){
+    _out<<"<tokens>\n";
+}
+
+void tokenizerAPI::Tokenizer::writeEnd(){
+    _out<<"</tokens>";
 }

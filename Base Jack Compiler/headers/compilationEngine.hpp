@@ -2,14 +2,10 @@
 #include<string>
 #include<fstream>
 #include<unordered_set>
-#include<vector>
 
 #include<iostream>
 
 #include "./errors.hpp"
-#include "./tokenizer.hpp"
-#include "./vmWriter.hpp"
-#include "./symbolTable.hpp"
 
 namespace compileAPI {
     static std::string types[] = {"int", "char", "boolean"};
@@ -20,10 +16,8 @@ namespace compileAPI {
     class Compile{
 
         public:
-            Compile(tokenizerAPI::Tokenizer &tokenizer, symbolTable::SymbolTable &sym, vmWriter::VMWriter &vm):
-             _tokenizer(tokenizer), _sym(sym), _writer(vm), _tokenType(""),
-             _token(""){}
-            ~Compile(){}
+            Compile(std::ifstream &in, std::ofstream &out):_in(in), _out(out), _tokenType(""), _token(""){}
+            ~Compile(){_out.close();}
 
             void compileTokens();
             void compileClass();
@@ -45,23 +39,17 @@ namespace compileAPI {
             void getNextLine(const std::string &errMsg, const std::string &tokenType, const std::string &token);
             void writeLine();
             void compileSubroutineCall();
-            bool checkKeyboardConst(const std::string &token);
-            bool checkUnaryTerm(const std::string &token);
-            bool checkTerm(const std::string &token);
-            void addToken(const std::string &t);      
+            bool checkKeyboardConst();
+            bool checkUnaryTerm();
+            bool checkTerm();            
             
         private:
-            tokenizerAPI::Tokenizer _tokenizer;
-            symbolTable::SymbolTable _sym;
-            vmWriter::VMWriter _writer;
+            std::ifstream& _in;
+            std::ofstream& _out;
             std::string _tokenType;
             std::string _token;
-            std::string _kind;
-            std::string _type;
-            std::string _className;
-            int _argCount = 0;
-            std::vector<std::string> _tokenList;
-            int _curr = 0;
-            int _labelCount = 0;
+            std::string _inputLine;
+            int _lineNumber = 0;
+            int _pos = 0;
     };
 }
